@@ -44,7 +44,7 @@ This is powerful tech. Treat it with the respect it deserves.
 ## 🛠 Features (Soon™)
 
 - One-click installer URL for easy chaos.
-- Open merge policy: get a PR into `main`, and you’re a contributor. open branches to all (incluuding for the installer)
+- Open merge policy: open a PR into `main`, and you’re added as contributor. open branches to all (incluuding for the installer) on request. Just open an issue.
 - Continuous merge + cleanup from upstream and `opendb`.
 
 ---
