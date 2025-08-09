@@ -1,5 +1,6 @@
 # 🚀 LibrePilot  
 **A fork-friendly playground for hackers, tinkerers, and the terminally curious.**
+<img width="1024" height="1024" alt="image" src="https://github.com/user-attachments/assets/d0235e03-913b-4636-afce-ac829970669e" />
 
 ---
 
