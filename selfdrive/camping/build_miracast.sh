@@ -17,9 +17,13 @@ if ! command -v meson &> /dev/null || ! command -v ninja &> /dev/null; then
 fi
 
 # Check if submodule is initialized
-if [ ! -d "$MIRACAST_DIR/.git" ]; then
+if [ ! -d "$MIRACAST_DIR" ] || [ ! -f "$MIRACAST_DIR/meson.build" ]; then
   echo "Initializing miraclecast submodule..."
-  git submodule update --init --recursive selfdrive/camping/miraclecast
+  cd "$(dirname "$MIRACAST_DIR")"
+  if [ ! -d miraclecast ]; then
+    git clone https://github.com/albfan/miraclecast.git miraclecast
+  fi
+  cd "$SCRIPT_DIR"
 fi
 
 # Create output directory
