@@ -31,7 +31,19 @@ echo "miracle-wifid started (PID: $WIFID_PID)"
 # Start sinkctl if available
 if [ -x "$SINKCTL" ]; then
   echo "Starting Miracast sink controller..."
-  "$SINKCTL" -a &
+  # Run sinkctl with proper commands
+  # First set managed, then run/bind on wlan0
+  (
+    sleep 5  # Wait for wifid to initialize
+    echo "set-managed wlan0 yes"
+    echo "bind wlan0"
+    echo "run wlan0"
+    # Keep it running
+    while true; do
+      sleep 60
+      echo "list"
+    done
+  ) | "$SINKCTL" --log-level info &
   SINKCTL_PID=$!
   echo "miracle-sinkctl started (PID: $SINKCTL_PID)"
 fi
