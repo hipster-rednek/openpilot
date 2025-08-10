@@ -9,6 +9,13 @@ MIRACAST_DIR="$SCRIPT_DIR/miraclecast"
 BUILD_DIR="$MIRACAST_DIR/build"
 OUTPUT_DIR="$SCRIPT_DIR/bin"
 
+# Check for required build tools
+if ! command -v meson &> /dev/null || ! command -v ninja &> /dev/null; then
+  echo "WARNING: meson or ninja not found. Skipping MiracleCast build."
+  echo "To build MiracleCast, install: meson ninja-build"
+  exit 0
+fi
+
 # Check if submodule is initialized
 if [ ! -d "$MIRACAST_DIR/.git" ]; then
   echo "Initializing miraclecast submodule..."
@@ -32,7 +39,7 @@ MESON_ARGS=(
   "--buildtype=release"
   "-Drely-udev=false"
   "-Dbuild-tests=false"
-  "-Dbuild-gstreamer=true"
+  "-Denable-systemd=false"
 )
 if [ -f /usr/local/share/meson/cross/aarch64-linux-gnu.txt ]; then
   MESON_ARGS+=("--cross-file=/usr/local/share/meson/cross/aarch64-linux-gnu.txt")
