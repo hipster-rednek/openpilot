@@ -1,0 +1,15 @@
+[Unit]
+Description=Miracast WiFi Direct Daemon
+After=network.target dbus.service
+
+[Service]
+Type=simple
+ExecStart=/data/camping/bin/miracle-wifid -i wlan0 --log-level info
+Restart=on-failure
+RestartSec=5
+User=root
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
