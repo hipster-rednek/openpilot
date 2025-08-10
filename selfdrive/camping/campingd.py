@@ -23,12 +23,24 @@ def main():
     local_bin = "/data/camping/bin"
     wifid = os.path.join(local_bin, "miracle-wifid")
     sinkctl = os.path.join(local_bin, "miracle-sinkctl")
+    # Fallback to repo-staged binaries if /data install missing
+    if not (os.path.exists(wifid) and os.access(wifid, os.X_OK)):
+      repo_bin = os.path.join("/data/openpilot", "selfdrive", "camping", "bin")
+      wifid_repo = os.path.join(repo_bin, "miracle-wifid")
+      sinkctl_repo = os.path.join(repo_bin, "miracle-sinkctl")
+      if os.path.exists(wifid_repo) and os.access(wifid_repo, os.X_OK):
+        wifid = wifid_repo
+      if os.path.exists(sinkctl_repo) and os.access(sinkctl_repo, os.X_OK):
+        sinkctl = sinkctl_repo
 
     if os.path.exists(wifid) and os.access(wifid, os.X_OK):
       # Prefer dedicated P2P interface when available; fall back to wlan0
       preferred_iface = "p2p0" if os.path.isdir("/sys/class/net/p2p0") else "wlan0"
-      # Start miracle-wifid with proper arguments
-      proc = subprocess.Popen([wifid, "-i", preferred_iface, "--log-level", "info"],
+      # Start miracle-wifid with proper arguments. Requires root; try sudo -n when not root.
+      cmd = [wifid, "-i", preferred_iface, "--log-level", "info"]
+      if os.geteuid() != 0:
+        cmd = ["sudo", "-n", *cmd]
+      proc = subprocess.Popen(cmd,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
       cloudlog.event("campingd.receiver", name="miracle-wifid", interface=preferred_iface)
       

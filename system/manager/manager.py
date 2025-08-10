@@ -106,18 +106,28 @@ def manager_init() -> None:
   for p in managed_processes.values():
     p.prepare()
 
-  # Auto-install camping binaries on branch install/update
+  # Auto-install camping binaries on branch install/update (best-effort, idempotent)
   try:
     repo_bins_dir = Path("selfdrive/camping/bin")
     if repo_bins_dir.is_dir():
       dest_dir = Path("/data/camping/bin")
       dest_dir.mkdir(parents=True, exist_ok=True)
+      copied_any = False
       for src in repo_bins_dir.iterdir():
-        if src.is_file():
-          dst = dest_dir / src.name
-          shutil.copy2(src, dst)
-          os.chmod(dst, 0o755)
-      cloudlog.info("Installed camping binaries to /data/camping/bin")
+        if not src.is_file():
+          continue
+        dst = dest_dir / src.name
+        try:
+          # Only copy if destination missing or different size/mtime
+          if not dst.exists() or src.stat().st_size != dst.stat().st_size or int(src.stat().st_mtime) != int(dst.stat().st_mtime):
+            shutil.copy2(src, dst)
+            os.chmod(dst, 0o755)
+            copied_any = True
+        except Exception:
+          # Keep going for other files
+          cloudlog.exception(f"camping.install_copy_failed:{src.name}", error=False)
+      if copied_any:
+        cloudlog.info("Installed/updated camping binaries to /data/camping/bin")
   except Exception:
     cloudlog.exception("camping.install_binaries_failed", error=False)
 
