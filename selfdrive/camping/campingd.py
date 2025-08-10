@@ -25,17 +25,31 @@ def main():
     sinkctl = os.path.join(local_bin, "miracle-sinkctl")
 
     if os.path.exists(wifid) and os.access(wifid, os.X_OK):
-      proc = subprocess.Popen([wifid])
-      cloudlog.event("campingd.receiver", name="miracle-wifid")
-
-      # If sink control exists, run in auto-accept mode to act as a sink
-      if os.path.exists(sinkctl) and os.access(sinkctl, os.X_OK):
-        # -a: auto-accept; some builds use --autoconnect, but -a is common
-        try:
-          sink_proc = subprocess.Popen([sinkctl, "-a"])  # non-blocking
-          cloudlog.event("campingd.sinkctl", name="miracle-sinkctl", args="-a")
-        except Exception:
-          cloudlog.exception("campingd.sinkctl_start_failed", error=False)
+      # Start miracle-wifid with proper arguments
+      # Use wlan0 interface and enable debug logging
+      proc = subprocess.Popen([wifid, "-i", "wlan0", "--log-level", "info"],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+      cloudlog.event("campingd.receiver", name="miracle-wifid", interface="wlan0")
+      
+      # Wait a bit for wifid to start
+      time.sleep(2)
+      
+      # Check if process is still running
+      if proc.poll() is not None:
+        stdout, stderr = proc.communicate(timeout=1)
+        cloudlog.event("campingd.wifid_failed", 
+                      stdout=stdout.decode('utf-8', errors='ignore'),
+                      stderr=stderr.decode('utf-8', errors='ignore'))
+        proc = None
+      else:
+        # If sink control exists, run in auto-accept mode to act as a sink
+        if os.path.exists(sinkctl) and os.access(sinkctl, os.X_OK):
+          try:
+            sink_proc = subprocess.Popen([sinkctl, "-a"],
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            cloudlog.event("campingd.sinkctl", name="miracle-sinkctl", args="-a")
+          except Exception:
+            cloudlog.exception("campingd.sinkctl_start_failed", error=False)
     else:
       cloudlog.event("campingd.receiver", name="miracast_not_found", path=wifid)
 
