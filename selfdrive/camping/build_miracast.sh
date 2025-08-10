@@ -43,7 +43,7 @@ MESON_ARGS=(
   "--buildtype=release"
   "-Drely-udev=false"
   "-Dbuild-tests=false"
-  "-Denable-systemd=false"
+  "-Denable-systemd=true"
 )
 if [ -f /usr/local/share/meson/cross/aarch64-linux-gnu.txt ]; then
   MESON_ARGS+=("--cross-file=/usr/local/share/meson/cross/aarch64-linux-gnu.txt")
