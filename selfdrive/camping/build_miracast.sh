@@ -56,9 +56,9 @@ ninja -C "$BUILD_DIR"
 
 # Copy binaries to output directory
 echo "Copying binaries to $OUTPUT_DIR..."
-cp "$BUILD_DIR/src/wifi/miracle-wifid" "$OUTPUT_DIR/"
-cp "$BUILD_DIR/src/ctl/miracle-wfdctl" "$OUTPUT_DIR/"
-cp "$BUILD_DIR/src/ctl/miracle-sinkctl" "$OUTPUT_DIR/"
+cp "$BUILD_DIR/src/wifi/miracle-wifid" "$OUTPUT_DIR/" 2>/dev/null || echo "miracle-wifid not found"
+cp "$BUILD_DIR/src/ctl/miracle-wifictl" "$OUTPUT_DIR/" 2>/dev/null || echo "miracle-wifictl not found"
+cp "$BUILD_DIR/src/ctl/miracle-sinkctl" "$OUTPUT_DIR/" 2>/dev/null || echo "miracle-sinkctl not found"
 
 # Make binaries executable
 chmod +x "$OUTPUT_DIR"/*

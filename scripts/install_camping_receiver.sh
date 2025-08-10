@@ -15,7 +15,7 @@ copy_if_exists() {
 
 # MiracleCast daemons/tools (Miracast-only)
 copy_if_exists selfdrive/camping/bin/miracle-wifid miracle-wifid
-copy_if_exists selfdrive/camping/bin/miracle-wfdctl miracle-wfdctl
+copy_if_exists selfdrive/camping/bin/miracle-wifictl miracle-wifictl
 copy_if_exists selfdrive/camping/bin/miracle-sinkctl miracle-sinkctl
 
 echo "Done. Ensure files exist and are executable on device."
