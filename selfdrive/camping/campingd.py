@@ -25,11 +25,12 @@ def main():
     sinkctl = os.path.join(local_bin, "miracle-sinkctl")
 
     if os.path.exists(wifid) and os.access(wifid, os.X_OK):
+      # Prefer dedicated P2P interface when available; fall back to wlan0
+      preferred_iface = "p2p0" if os.path.isdir("/sys/class/net/p2p0") else "wlan0"
       # Start miracle-wifid with proper arguments
-      # Use wlan0 interface and enable debug logging
-      proc = subprocess.Popen([wifid, "-i", "wlan0", "--log-level", "info"],
+      proc = subprocess.Popen([wifid, "-i", preferred_iface, "--log-level", "info"],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-      cloudlog.event("campingd.receiver", name="miracle-wifid", interface="wlan0")
+      cloudlog.event("campingd.receiver", name="miracle-wifid", interface=preferred_iface)
       
       # Wait a bit for wifid to start
       time.sleep(2)

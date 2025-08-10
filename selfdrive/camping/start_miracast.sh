@@ -13,8 +13,22 @@ if [ ! -x "$WIFID" ]; then
 fi
 
 echo "Starting Miracast WiFi Direct daemon..."
-# Start miracle-wifid in background
-"$WIFID" -i wlan0 --log-level info &
+
+# Enable p2p0 interface
+ip link set p2p0 up 2>/dev/null || echo "Could not bring up p2p0"
+
+# Try p2p0 first, fall back to wlan0
+INTERFACE="p2p0"
+# Consider interface available if it exists at all; it may be brought up by wifid
+if [ ! -d "/sys/class/net/p2p0" ]; then
+  echo "p2p0 not available, using wlan0"
+  INTERFACE="wlan0"
+fi
+
+echo "Using interface: $INTERFACE"
+
+# Start miracle-wifid in background (bind to chosen interface)
+"$WIFID" -i "$INTERFACE" --log-level info &
 WIFID_PID=$!
 
 # Wait for wifid to initialize
@@ -32,12 +46,12 @@ echo "miracle-wifid started (PID: $WIFID_PID)"
 if [ -x "$SINKCTL" ]; then
   echo "Starting Miracast sink controller..."
   # Run sinkctl with proper commands
-  # First set managed, then run/bind on wlan0
+  # First set managed, then run/bind on selected interface
   (
     sleep 5  # Wait for wifid to initialize
-    echo "set-managed wlan0 yes"
-    echo "bind wlan0"
-    echo "run wlan0"
+    echo "set-managed $INTERFACE yes"
+    echo "bind $INTERFACE"
+    echo "run $INTERFACE"
     # Keep it running
     while true; do
       sleep 60
@@ -55,7 +69,7 @@ echo "Your device should now be discoverable for screen mirroring"
 while true; do
   if ! kill -0 $WIFID_PID 2>/dev/null; then
     echo "miracle-wifid stopped, restarting..."
-    "$WIFID" -i wlan0 --log-level info &
+    "$WIFID" -i "$INTERFACE" --log-level info &
     WIFID_PID=$!
   fi
   sleep 10
