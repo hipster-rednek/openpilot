@@ -57,6 +57,10 @@ class Controls:
     elif self.CP.lateralTuning.which() == 'torque':
       self.LaC = LatControlTorque(self.CP, self.CI)
 
+    # Vision-driven button shim state (for stock SCC influence without SCC_CONTROL)
+    self._shim_last_action_s = 0.0
+    self._shim_canceled = False
+
   def update(self):
     self.sm.update(15)
     if self.sm.updated["liveCalibration"]:
@@ -149,6 +153,39 @@ class Controls:
     CC.cruiseControl.override = CC.enabled and not CC.longActive and self.CP.openpilotLongitudinalControl
     CC.cruiseControl.cancel = CS.cruiseState.enabled and (not CC.enabled or not self.CP.pcmCruise)
     CC.cruiseControl.resume = CC.enabled and CS.cruiseState.standstill and not self.sm['longitudinalPlan'].shouldStop
+
+    # Apply button-based longitudinal shim (Hyundai GV80 2021 CAN-FD, stock SCC only)
+    try:
+      from time import monotonic
+      shim_allowed = (
+        (self.CP.brand == 'hyundai') and
+        (self.CP.carFingerprint == 'GENESIS_GV80_2021') and
+        (not self.CP.openpilotLongitudinalControl) and
+        self.CP.pcmCruise and
+        self.sm.all_checks(['longitudinalPlan'])
+      )
+
+      if shim_allowed and CC.enabled and CS.cruiseState.available:
+        lp = self.sm['longitudinalPlan']
+        now_s = monotonic()
+        cooldown_ok = (now_s - self._shim_last_action_s) > 1.0
+
+        # Heuristic: when planner requests notable decel and we're moving, coast early via cancel
+        want_cancel = (CS.cruiseState.enabled and (not CS.standstill) and (lp.aTargetMin < -0.5) and (CS.vEgo > 8.0))
+
+        # Heuristic to resume: either target accel no longer decel or we slowed sufficiently
+        want_resume = (self._shim_canceled and ((lp.aTargetMin > -0.1) or (CS.vEgo < 6.0)))
+
+        if want_cancel and cooldown_ok and not self._shim_canceled:
+          CC.cruiseControl.cancel = True
+          self._shim_canceled = True
+          self._shim_last_action_s = now_s
+        elif want_resume and (now_s - self._shim_last_action_s) > 2.0:
+          CC.cruiseControl.resume = True
+          self._shim_canceled = False
+          self._shim_last_action_s = now_s
+    except Exception as e:
+      cloudlog.exception(f"button_shim error: {e}")
 
     hudControl = CC.hudControl
     hudControl.setSpeed = float(CS.vCruiseCluster * CV.KPH_TO_MS)
