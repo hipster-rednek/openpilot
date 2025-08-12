@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 import math
-from numbers import Number
+from typing import SupportsFloat
 
 from cereal import car, log
 import cereal.messaging as messaging
-from openpilot.common.constants import CV
+from openpilot.common.conversions import Conversions as CV
 from openpilot.common.params import Params
 from openpilot.common.realtime import config_realtime_process, Priority, Ratekeeper
 from openpilot.common.swaglog import cloudlog
 
+from openpilot.common.realtime import DT_CTRL
 from opendbc.car.car_helpers import interfaces
+from opendbc.car.hyundai.values import CAR
 from opendbc.car.vehicle_model import VehicleModel
 from openpilot.selfdrive.controls.lib.drive_helpers import clip_curvature
 from openpilot.selfdrive.controls.lib.latcontrol import LatControl
@@ -32,6 +34,8 @@ class Controls:
     cloudlog.info("controlsd is waiting for CarParams")
     self.CP = messaging.log_from_bytes(self.params.get("CarParams", block=True), car.CarParams)
     cloudlog.info("controlsd got CarParams")
+    self.split_lkas_and_acc = self.params.get_bool("SplitLkasAndAcc")
+    self.last_blinker_frame = 0
 
     self.CI = interfaces[self.CP.carFingerprint](self.CP)
 
@@ -40,7 +44,7 @@ class Controls:
                                    'driverMonitoringState', 'onroadEvents', 'driverAssistance'], poll='selfdriveState')
     self.pm = messaging.PubMaster(['carControl', 'controlsState'])
 
-    self.steer_limited_by_safety = False
+    self.steer_limited_by_controls = False
     self.curvature = 0.0
     self.desired_curvature = 0.0
 
@@ -92,9 +96,15 @@ class Controls:
 
     # Check which actuators can be enabled
     standstill = abs(CS.vEgo) <= max(self.CP.minSteerSpeed, 0.3) or CS.standstill
-    CC.latActive = self.sm['selfdriveState'].active and not CS.steerFaultTemporary and not CS.steerFaultPermanent and \
-                   (not standstill or self.CP.steerAtStandstill)
-    CC.longActive = CC.enabled and not any(e.overrideLongitudinal for e in self.sm['onroadEvents']) and self.CP.openpilotLongitudinalControl
+    CC.latActive = (self.sm['selfdriveState'].active and (not CS.steerFaultTemporary) and (not CS.steerFaultPermanent) and
+                    (not standstill or self.CP.steerAtStandstill) and (not self.split_lkas_and_acc or
+                    (CS.lkasEnabled and
+                    ((not CS.belowLaneChangeSpeed) or (not (((self.sm.frame - self.last_blinker_frame) * DT_CTRL) < 1.0))))))
+    CC.longActive = (CC.enabled and
+                     (not any(e.overrideLongitudinal for e in self.sm['onroadEvents'])) and
+                     self.CP.openpilotLongitudinalControl and
+                     (not self.split_lkas_and_acc or
+                     (CS.cruiseState.enabled or (self.CP.pcmCruise and CS.accEnabled and self.CP.minEnableSpeed > 0 and not CS.cruiseState.enabled))))
 
     actuators = CC.actuators
     actuators.longControlState = self.LoC.long_control_state
@@ -103,6 +113,9 @@ class Controls:
     if model_v2.meta.laneChangeState != LaneChangeState.off:
       CC.leftBlinker = model_v2.meta.laneChangeDirection == LaneChangeDirection.left
       CC.rightBlinker = model_v2.meta.laneChangeDirection == LaneChangeDirection.right
+
+    if CS.leftBlinker or CS.rightBlinker:
+      self.last_blinker_frame = self.sm.frame
 
     if not CC.latActive:
       self.LaC.reset()
@@ -120,14 +133,14 @@ class Controls:
 
     actuators.curvature = self.desired_curvature
     steer, steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
-                                                       self.steer_limited_by_safety, self.desired_curvature,
-                                                       curvature_limited)  # TODO what if not available
+                                                       self.steer_limited_by_controls, self.desired_curvature,
+                                                       self.calibrated_pose, curvature_limited)  # TODO what if not available
     actuators.torque = float(steer)
     actuators.steeringAngleDeg = float(steeringAngleDeg)
     # Ensure no NaNs/Infs
     for p in ACTUATOR_FIELDS:
       attr = getattr(actuators, p)
-      if not isinstance(attr, Number):
+      if not isinstance(attr, SupportsFloat):
         continue
 
       if not math.isfinite(attr):
@@ -138,6 +151,7 @@ class Controls:
 
   def publish(self, CC, lac_log):
     CS = self.sm['carState']
+    model_v2 = self.sm['modelV2']
 
     # Orientation and angle rates can be useful for carcontroller
     # Only calibrated (car) frame is relevant for the carcontroller
@@ -147,8 +161,11 @@ class Controls:
       CC.angularVelocity = self.calibrated_pose.angular_velocity.xyz.tolist()
 
     CC.cruiseControl.override = CC.enabled and not CC.longActive and self.CP.openpilotLongitudinalControl
-    CC.cruiseControl.cancel = CS.cruiseState.enabled and (not CC.enabled or not self.CP.pcmCruise)
-    CC.cruiseControl.resume = CC.enabled and CS.cruiseState.standstill and not self.sm['longitudinalPlan'].shouldStop
+    CC.cruiseControl.cancel = CS.cruiseState.enabled and (not CC.enabled or (not self.CP.pcmCruise and not self.split_lkas_and_acc))
+
+    speeds = self.sm['longitudinalPlan'].speeds
+    if len(speeds):
+      CC.cruiseControl.resume = CC.enabled and CS.cruiseState.standstill and speeds[-1] > 0.1
 
     hudControl = CC.hudControl
     hudControl.setSpeed = float(CS.vCruiseCluster * CV.KPH_TO_MS)
@@ -157,9 +174,16 @@ class Controls:
     hudControl.leadVisible = self.sm['longitudinalPlan'].hasLead
     hudControl.leadDistanceBars = self.sm['selfdriveState'].personality.raw + 1
     hudControl.visualAlert = self.sm['selfdriveState'].alertHudVisual
-
-    hudControl.rightLaneVisible = True
-    hudControl.leftLaneVisible = True
+    if len(model_v2.laneLineProbs) and self.CP.carFingerprint == CAR.KIA_CARNIVAL_4TH_GEN:
+      hudControl.rightLaneProb = model_v2.laneLineProbs[2]
+      hudControl.rightLaneVisible = model_v2.laneLineProbs[2] > 0.5
+      hudControl.leftLaneProb = model_v2.laneLineProbs[1]
+      hudControl.leftLaneVisible = model_v2.laneLineProbs[1] > 0.5
+    else:
+      hudControl.rightLaneProb = 1.0
+      hudControl.rightLaneVisible = True
+      hudControl.leftLaneProb = 1.0
+      hudControl.leftLaneVisible = True
     if self.sm.valid['driverAssistance']:
       hudControl.leftLaneDepart = self.sm['driverAssistance'].leftLaneDeparture
       hudControl.rightLaneDepart = self.sm['driverAssistance'].rightLaneDeparture
@@ -167,10 +191,10 @@ class Controls:
     if self.sm['selfdriveState'].active:
       CO = self.sm['carOutput']
       if self.CP.steerControlType == car.CarParams.SteerControlType.angle:
-        self.steer_limited_by_safety = abs(CC.actuators.steeringAngleDeg - CO.actuatorsOutput.steeringAngleDeg) > \
+        self.steer_limited_by_controls = abs(CC.actuators.steeringAngleDeg - CO.actuatorsOutput.steeringAngleDeg) > \
                                               STEER_ANGLE_SATURATION_THRESHOLD
       else:
-        self.steer_limited_by_safety = abs(CC.actuators.torque - CO.actuatorsOutput.torque) > 1e-2
+        self.steer_limited_by_controls = abs(CC.actuators.torque - CO.actuatorsOutput.torque) > 1e-2
 
     # TODO: both controlsState and carControl valids should be set by
     #       sm.all_checks(), but this creates a circular dependency

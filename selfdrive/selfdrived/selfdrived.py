@@ -15,9 +15,7 @@ from openpilot.common.swaglog import cloudlog
 from openpilot.common.gps import get_gps_location_service
 
 from openpilot.selfdrive.car.car_specific import CarSpecificEvents
-from openpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose
 from openpilot.selfdrive.selfdrived.events import Events, ET
-from openpilot.selfdrive.selfdrived.helpers import ExcessiveActuationCheck
 from openpilot.selfdrive.selfdrived.state import StateMachine
 from openpilot.selfdrive.selfdrived.alertmanager import AlertManager, set_offroad_alert
 
@@ -27,7 +25,6 @@ from openpilot.system.version import get_build_metadata
 REPLAY = "REPLAY" in os.environ
 SIMULATION = "SIMULATION" in os.environ
 TESTING_CLOSET = "TESTING_CLOSET" in os.environ
-
 LONGITUDINAL_PERSONALITY_MAP = {v: k for k, v in log.LongitudinalPersonality.schema.enumerants.items()}
 
 ThermalStatus = log.DeviceState.ThermalStatus
@@ -58,10 +55,7 @@ class SelfdriveD:
 
     self.car_events = CarSpecificEvents(self.CP)
 
-    self.pose_calibrator = PoseCalibrator()
-    self.calibrated_pose: Pose | None = None
-    self.excessive_actuation_check = ExcessiveActuationCheck()
-    self.excessive_actuation = self.params.get("Offroad_ExcessiveActuation") is not None
+    self.disengage_from_brakes = False
 
     # Setup sockets
     self.pm = messaging.PubMaster(['selfdriveState', 'onroadEvents'])
@@ -83,7 +77,7 @@ class SelfdriveD:
     self.sm = messaging.SubMaster(['deviceState', 'pandaStates', 'peripheralState', 'modelV2', 'liveCalibration',
                                    'carOutput', 'driverMonitoringState', 'longitudinalPlan', 'livePose', 'liveDelay',
                                    'managerState', 'liveParameters', 'radarState', 'liveTorqueParameters',
-                                   'controlsState', 'carControl', 'driverAssistance', 'alertDebug', 'userBookmark', 'audioFeedback'] + \
+                                   'controlsState', 'carControl', 'driverAssistance', 'alertDebug', 'userFlag'] + \
                                    self.camera_packets + self.sensor_packets + self.gps_packets,
                                   ignore_alive=ignore, ignore_avg_freq=ignore,
                                   ignore_valid=ignore, frequency=int(1/DT_CTRL))
@@ -92,6 +86,8 @@ class SelfdriveD:
     self.is_metric = self.params.get_bool("IsMetric")
     self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
     self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
+    self.split_lkas_and_acc = self.params.get_bool("SplitLkasAndAcc")
+    self.resume_lkas_after_brake = self.params.get_bool("ResumeLkasAfterBrake")
 
     car_recognized = self.CP.brand != 'mock'
 
@@ -117,7 +113,7 @@ class SelfdriveD:
     self.logged_comm_issue = None
     self.not_running_prev = None
     self.experimental_mode = False
-    self.personality = self.params.get("LongitudinalPersonality", return_default=True)
+    self.personality = self.read_personality_param()
     self.recalibrating_seen = False
     self.state_machine = StateMachine()
     self.rk = Ratekeeper(100, print_delay_threshold=None)
@@ -167,12 +163,9 @@ class SelfdriveD:
       self.events.add(EventName.selfdriveInitializing)
       return
 
-    # Check for user bookmark press (bookmark button or end of LKAS button feedback)
-    if self.sm.updated['userBookmark']:
-      self.events.add(EventName.userBookmark)
-
-    if self.sm.updated['audioFeedback']:
-      self.events.add(EventName.audioFeedback)
+    # Check for user flag (bookmark) press
+    if self.sm.updated['userFlag']:
+      self.events.add(EventName.userFlag)
 
     # Don't add any more events while in dashcam mode
     if self.CP.passive:
@@ -201,7 +194,18 @@ class SelfdriveD:
       if (CS.gasPressed and not self.CS_prev.gasPressed and self.disengage_on_accelerator) or \
         (CS.brakePressed and (not self.CS_prev.brakePressed or not CS.standstill)) or \
         (CS.regenBraking and (not self.CS_prev.regenBraking or not CS.standstill)):
-        self.events.add(EventName.pedalPressed)
+        if (CS.lkasEnabled):
+          self.disengage_from_brakes = True
+        if (not self.split_lkas_and_acc or (CS.cruiseState.enabled and not CS.lkasEnabled)):
+          self.events.add(EventName.pedalPressed)
+        else:
+          self.events.add(EventName.silentPedalPressed)
+
+      if (not CS.brakePressed) and (not CS.brakeHoldActive):
+        if(self.resume_lkas_after_brake):
+          if self.disengage_from_brakes and CS.lkasEnabled:
+            self.events.add(EventName.silentButtonEnable)
+        self.disengage_from_brakes = False
 
     # Create events for temperature, disk space, and memory
     if self.sm['deviceState'].thermalStatus >= ThermalStatus.red:
@@ -237,22 +241,6 @@ class SelfdriveD:
     if self.is_ldw_enabled and self.sm.valid['driverAssistance']:
       if self.sm['driverAssistance'].leftLaneDeparture or self.sm['driverAssistance'].rightLaneDeparture:
         self.events.add(EventName.ldw)
-
-    # Check for excessive actuation
-    if self.sm.updated['liveCalibration']:
-      self.pose_calibrator.feed_live_calib(self.sm['liveCalibration'])
-    if self.sm.updated['livePose']:
-      device_pose = Pose.from_live_pose(self.sm['livePose'])
-      self.calibrated_pose = self.pose_calibrator.build_calibrated_pose(device_pose)
-
-    if self.calibrated_pose is not None:
-      excessive_actuation = self.excessive_actuation_check.update(self.sm, CS, self.calibrated_pose)
-      if not self.excessive_actuation and excessive_actuation is not None:
-        set_offroad_alert("Offroad_ExcessiveActuation", True, extra_text=str(excessive_actuation))
-        self.excessive_actuation = True
-
-    if self.excessive_actuation:
-      self.events.add(EventName.excessiveActuation)
 
     # Handle lane change
     if self.sm['modelV2'].meta.laneChangeState == LaneChangeState.preLaneChange:
@@ -305,12 +293,13 @@ class SelfdriveD:
           self.events.add(EventName.cameraFrameRate)
     if not REPLAY and self.rk.lagging:
       self.events.add(EventName.selfdrivedLagging)
-    if self.sm['radarState'].radarErrors.canError:
-      self.events.add(EventName.canError)
-    elif self.sm['radarState'].radarErrors.radarUnavailableTemporary:
-      self.events.add(EventName.radarTempUnavailable)
-    elif any(self.sm['radarState'].radarErrors.to_dict().values()):
-      self.events.add(EventName.radarFault)
+    if not self.sm.valid['radarState']:
+      if self.sm['radarState'].radarErrors.canError:
+        self.events.add(EventName.canError)
+      elif self.sm['radarState'].radarErrors.radarUnavailableTemporary:
+        self.events.add(EventName.radarTempUnavailable)
+      else:
+        self.events.add(EventName.radarFault)
     if not self.sm.valid['pandaStates']:
       self.events.add(EventName.usbError)
     if CS.canTimeout:
@@ -354,7 +343,7 @@ class SelfdriveD:
 
     if not REPLAY:
       # Check for mismatch between openpilot and car's PCM
-      cruise_mismatch = CS.cruiseState.enabled and (not self.enabled or not self.CP.pcmCruise)
+      cruise_mismatch = CS.cruiseState.enabled and (not self.enabled or (not self.CP.pcmCruise and not self.split_lkas_and_acc))
       self.cruise_mismatch_counter = self.cruise_mismatch_counter + 1 if cruise_mismatch else 0
       if self.cruise_mismatch_counter > int(6. / DT_CTRL):
         self.events.add(EventName.cruiseMismatch)
@@ -366,14 +355,18 @@ class SelfdriveD:
     controlstate = self.sm['controlsState']
     lac = getattr(controlstate.lateralControlState, controlstate.lateralControlState.which())
     if lac.active and not recent_steer_pressed and not self.CP.notCar:
-      clipped_speed = max(CS.vEgo, 0.3)
-      actual_lateral_accel = controlstate.curvature * (clipped_speed**2)
-      desired_lateral_accel = self.sm['modelV2'].action.desiredCurvature * (clipped_speed**2)
-      undershooting = abs(desired_lateral_accel) / abs(1e-3 + actual_lateral_accel) > 1.2
-      turning = abs(desired_lateral_accel) > 1.0
-      # TODO: lac.saturated includes speed and other checks, should be pulled out
-      if undershooting and turning and lac.saturated:
-        self.events.add(EventName.steerSaturated)
+      if (not self.split_lkas_and_acc or
+          (not CS.steeringPressed and
+          CS.lkasEnabled and
+          not (CS.leftBlinker or CS.rightBlinker))):
+        clipped_speed = max(CS.vEgo, 0.3)
+        actual_lateral_accel = controlstate.curvature * (clipped_speed**2)
+        desired_lateral_accel = self.sm['modelV2'].action.desiredCurvature * (clipped_speed**2)
+        undershooting = abs(desired_lateral_accel) / abs(1e-3 + actual_lateral_accel) > 1.2
+        turning = abs(desired_lateral_accel) > 1.0
+        # TODO: lac.saturated includes speed and other checks, should be pulled out
+        if undershooting and turning and lac.saturated:
+          self.events.add(EventName.steerSaturated)
 
     # Check for FCW
     stock_long_is_braking = self.enabled and not self.CP.openpilotLongitudinalControl and CS.aEgo < -1.25
@@ -399,12 +392,12 @@ class SelfdriveD:
     if self.CP.openpilotLongitudinalControl:
       if any(not be.pressed and be.type == ButtonType.gapAdjustCruise for be in CS.buttonEvents):
         self.personality = (self.personality - 1) % 3
-        self.params.put_nonblocking('LongitudinalPersonality', self.personality)
+        self.params.put_nonblocking('LongitudinalPersonality', str(self.personality))
         self.events.add(EventName.personalityChanged)
 
   def data_sample(self):
-    _car_state = messaging.recv_one(self.car_state_sock)
-    CS = _car_state.carState if _car_state else self.CS_prev
+    car_state = messaging.recv_one(self.car_state_sock)
+    CS = car_state.carState if car_state else self.CS_prev
 
     self.sm.update(0)
 
@@ -503,13 +496,19 @@ class SelfdriveD:
 
     self.CS_prev = CS
 
+  def read_personality_param(self):
+    try:
+      return int(self.params.get('LongitudinalPersonality'))
+    except (ValueError, TypeError):
+      return log.LongitudinalPersonality.standard
+
   def params_thread(self, evt):
     while not evt.is_set():
       self.is_metric = self.params.get_bool("IsMetric")
       self.is_ldw_enabled = self.params.get_bool("IsLdwEnabled")
       self.disengage_on_accelerator = self.params.get_bool("DisengageOnAccelerator")
       self.experimental_mode = self.params.get_bool("ExperimentalMode") and self.CP.openpilotLongitudinalControl
-      self.personality = self.params.get("LongitudinalPersonality", return_default=True)
+      self.personality = self.read_personality_param()
       time.sleep(0.1)
 
   def run(self):

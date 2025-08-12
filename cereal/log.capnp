@@ -131,6 +131,14 @@ struct OnroadEvent @0xc4fa6047f024e718 {
     excessiveActuation @96;
     audioFeedback @97;
 
+    manualSteeringRequired @96;
+    manualLongitudinalRequired @97;
+    silentPedalPressed @98;
+    silentButtonEnable @99;
+    silentBrakeHold @100;
+    silentWrongGear @101;
+    silentPcmEnable @102;
+
     soundsUnavailableDEPRECATED @47;
   }
 }
@@ -918,6 +926,8 @@ struct ControlsState @0x97ff69c53601abf1 {
     saturated @7 :Bool;
     actualLateralAccel @9 :Float32;
     desiredLateralAccel @10 :Float32;
+    actualLateralAccelCompensated @11 :Float32;
+    actualLateralAccelCompensatedYaw @12 :Float32;
    }
 
   struct LateralLQRState {
