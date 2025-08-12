@@ -1,6 +1,6 @@
 [submodule "panda"]
   path = panda
-  url = ../../spektor56/panda.git
+  url = https://github.com/sunnypilot/panda.git
 [submodule "opendbc"]
   path = opendbc_repo
   url = ../../spektor56/opendbc.git
