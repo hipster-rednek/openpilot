@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <QDebug>
+#include <QScrollArea>
 
 #include "common/watchdog.h"
 #include "common/util.h"
@@ -270,10 +271,12 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   addItem(offroadToggleBtn);
 
   // Silence shutdown beep when power is lost while engaged
-  auto silenceBeepBtn = new ButtonParamControl("SilencePowerLossBeep",
-                                              tr("Silence Power-Loss Beep"), tr("TOGGLE"),
-                                              tr("When enabled, suppress the loud beep that plays if power is cut while engaged (e.g., car turned off)."));
-  addItem(silenceBeepBtn);
+  auto silenceBeepToggle = new ParamControl(
+      "SilencePowerLossBeep",
+      tr("Silence Power-Loss Beep"),
+      tr("When enabled, suppress the loud beep that plays if power is cut while engaged (e.g., car turned off)."),
+      "../assets/icons/warning.png");
+  addItem(silenceBeepToggle);
 
   auto retrainingBtn = new ButtonControl(tr("Review Training Guide"), tr("REVIEW"), tr("Review the rules, features, and limitations of openpilot"));
   connect(retrainingBtn, &ButtonControl::clicked, [=]() {
