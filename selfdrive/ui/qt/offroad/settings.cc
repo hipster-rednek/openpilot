@@ -252,6 +252,23 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   });
   addItem(resetCalibBtn);
 
+  // Always Offroad toggle button
+  auto offroadToggleBtn = new ButtonControl(tr("Always Offroad Mode"), tr("TOGGLE"),
+                                            tr("Force the device to stay in offroad mode regardless of ignition state. Useful for debugging without starting processes."));
+  connect(offroadToggleBtn, &ButtonControl::clicked, [=]() {
+    bool cur = params.getBool("OffroadMode");
+    if (cur) {
+      if (ConfirmationDialog::confirm(tr("Exit Always Offroad mode?"), tr("Exit"), this)) {
+        params.remove("OffroadMode");
+      }
+    } else {
+      if (ConfirmationDialog::confirm(tr("Enter Always Offroad mode?"), tr("Enter"), this)) {
+        params.putBool("OffroadMode", true);
+      }
+    }
+  });
+  addItem(offroadToggleBtn);
+
   auto retrainingBtn = new ButtonControl(tr("Review Training Guide"), tr("REVIEW"), tr("Review the rules, features, and limitations of openpilot"));
   connect(retrainingBtn, &ButtonControl::clicked, [=]() {
     if (ConfirmationDialog::confirm(tr("Are you sure you want to review the training guide?"), tr("Review"), this)) {

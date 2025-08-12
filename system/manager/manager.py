@@ -141,6 +141,12 @@ def manager_thread() -> None:
     sm.update(1000)
 
     started = sm['deviceState'].started
+    # Force Offroad mode: allow user to force the system into offroad state regardless of ignition
+    try:
+      if params.get_bool("OffroadMode"):
+        started = False
+    except Exception:
+      pass
 
     if started and not started_prev:
       params.clear_all(ParamKeyType.CLEAR_ON_ONROAD_TRANSITION)
