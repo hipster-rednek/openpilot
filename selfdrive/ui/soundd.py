@@ -12,6 +12,7 @@ from openpilot.common.retry import retry
 from openpilot.common.swaglog import cloudlog
 
 from openpilot.system import micd
+from openpilot.common.params import Params
 
 SAMPLE_RATE = 48000
 SAMPLE_BUFFER = 4096 # (approx 100ms)
@@ -61,6 +62,7 @@ class Soundd:
     self.selfdrive_timeout_alert = False
 
     self.spl_filter_weighted = FirstOrderFilter(0, 2.5, FILTER_DT, initialized=False)
+    self.params = Params()
 
   def load_sounds(self):
     self.loaded_sounds: dict[int, np.ndarray] = {}
@@ -114,7 +116,9 @@ class Soundd:
       new_alert = sm['selfdriveState'].alertSound.raw
       self.update_alert(new_alert)
     elif check_selfdrive_timeout_alert(sm):
-      self.update_alert(AudibleAlert.warningImmediate)
+      # Allow user to silence the power-loss/timeout alert when car shuts off while engaged
+      if not self.params.get_bool("SilencePowerLossBeep"):
+        self.update_alert(AudibleAlert.warningImmediate)
       self.selfdrive_timeout_alert = True
     elif self.selfdrive_timeout_alert:
       self.update_alert(AudibleAlert.none)

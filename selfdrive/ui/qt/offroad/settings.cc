@@ -269,6 +269,12 @@ DevicePanel::DevicePanel(SettingsWindow *parent) : ListWidget(parent) {
   });
   addItem(offroadToggleBtn);
 
+  // Silence shutdown beep when power is lost while engaged
+  auto silenceBeepBtn = new ButtonParamControl("SilencePowerLossBeep",
+                                              tr("Silence Power-Loss Beep"), tr("TOGGLE"),
+                                              tr("When enabled, suppress the loud beep that plays if power is cut while engaged (e.g., car turned off)."));
+  addItem(silenceBeepBtn);
+
   auto retrainingBtn = new ButtonControl(tr("Review Training Guide"), tr("REVIEW"), tr("Review the rules, features, and limitations of openpilot"));
   connect(retrainingBtn, &ButtonControl::clicked, [=]() {
     if (ConfirmationDialog::confirm(tr("Are you sure you want to review the training guide?"), tr("Review"), this)) {
