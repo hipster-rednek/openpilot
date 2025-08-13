@@ -108,6 +108,8 @@ procs = [
   PythonProcess("uploader", "system.loggerd.uploader", always_run),
   PythonProcess("statsd", "system.statsd", always_run),
   PythonProcess("feedbackd", "selfdrive.ui.feedback.feedbackd", only_onroad),
+  # Screen casting server (WebRTC-based). Runs offroad/park-only. Disabled by default until fully integrated.
+  PythonProcess("castd", "system.cast.castd", only_offroad, enabled=True),
 
   # debug procs
   NativeProcess("bridge", "cereal/messaging", ["./bridge"], notcar),
