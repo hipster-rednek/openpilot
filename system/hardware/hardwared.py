@@ -397,6 +397,15 @@ def hardware_thread(end_event, hw_queue) -> None:
 
     # Check if we need to shut down
     if power_monitor.should_shutdown(onroad_conditions["ignition"], in_car, off_ts, started_seen):
+      # If user requested silence, attempt to suppress siren before shutdown via panda API (host-side only)
+      try:
+        if params.get_bool("SilencePowerLossBeep"):
+          import panda
+          Panda = panda.Panda
+          pd = Panda()
+          pd.set_siren(False)
+      except Exception:
+        pass
       cloudlog.warning(f"shutting device down, offroad since {off_ts}")
       params.put_bool("DoShutdown", True)
 
