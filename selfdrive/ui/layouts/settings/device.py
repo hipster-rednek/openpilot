@@ -53,6 +53,8 @@ class DeviceLayout(Widget):
       regulatory_btn := button_item("Regulatory", "VIEW", callback=self._on_regulatory),
       button_item("Review Training Guide", "REVIEW", DESCRIPTIONS['review_guide'], self._on_review_training_guide),
       button_item("Change Language", "CHANGE", callback=self._show_language_selection, enabled=ui_state.is_offroad),
+      button_item("Always Offroad Mode", "TOGGLE", "Force the device to stay offroad (no process start) regardless of ignition. Useful for updates and maintenance.",
+                  callback=self._toggle_offroad_mode, enabled=True),
       dual_button_item("Reboot", "Power Off", left_callback=self._reboot_prompt, right_callback=self._power_off_prompt),
       
       # Toggle to silence the power-off beep (sets a Param the firmware can read to suppress siren)
@@ -141,6 +143,10 @@ class DeviceLayout(Widget):
   def _toggle_silence_beep(self):
     cur = self._params.get_bool("SilencePowerLossBeep")
     self._params.put_bool("SilencePowerLossBeep", not cur)
+
+  def _toggle_offroad_mode(self):
+    cur = self._params.get_bool("OffroadMode")
+    self._params.put_bool("OffroadMode", not cur)
 
   def _pair_device(self):
     if not self._pair_device_dialog:
