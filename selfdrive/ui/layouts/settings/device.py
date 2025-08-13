@@ -54,6 +54,10 @@ class DeviceLayout(Widget):
       button_item("Review Training Guide", "REVIEW", DESCRIPTIONS['review_guide'], self._on_review_training_guide),
       button_item("Change Language", "CHANGE", callback=self._show_language_selection, enabled=ui_state.is_offroad),
       dual_button_item("Reboot", "Power Off", left_callback=self._reboot_prompt, right_callback=self._power_off_prompt),
+      
+      # Toggle to silence the power-off beep (sets a Param the firmware can read to suppress siren)
+      button_item("Silence Power-Loss Beep", "TOGGLE", "When enabled, suppress the loud beep that plays if power is cut while engaged (e.g., car turned off).",
+                  callback=self._toggle_silence_beep, enabled=ui_state.is_offroad),
     ]
     regulatory_btn.set_visible(TICI)
     return items
@@ -133,6 +137,10 @@ class DeviceLayout(Widget):
   def _perform_power_off(self, result: int):
     if not ui_state.engaged and result == DialogResult.CONFIRM:
       self._params.put_bool_nonblocking("DoShutdown", True)
+
+  def _toggle_silence_beep(self):
+    cur = self._params.get_bool("SilencePowerLossBeep")
+    self._params.put_bool("SilencePowerLossBeep", not cur)
 
   def _pair_device(self):
     if not self._pair_device_dialog:
