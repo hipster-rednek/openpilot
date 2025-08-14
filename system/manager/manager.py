@@ -88,6 +88,13 @@ def manager_init() -> None:
   if not build_metadata.openpilot.is_dirty:
     os.environ['CLEAN'] = '1'
 
+  # Map dev param to NO_UDS_LONG env for Hyundai long experiments
+  try:
+    if params.get_bool("NoUdsLongEnabled"):
+      os.environ['NO_UDS_LONG'] = '1'
+  except Exception:
+    pass
+
   # init logging
   sentry.init(sentry.SentryProject.SELFDRIVE)
   cloudlog.bind_global(dongle_id=dongle_id,

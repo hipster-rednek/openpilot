@@ -15,6 +15,10 @@ DESCRIPTIONS = {
     "Warning: This grants SSH access to all public keys in your GitHub settings. Never enter a GitHub username " +
     "other than your own. A comma employee will NEVER ask you to add their GitHub username."
   ),
+  'no_uds_long': (
+    "When enabled, openpilot will NOT send UDS CommunicationControl or tester-present to disable OEM ADAS/SCC on Hyundai CAN-FD. "
+    "Used for fail-silent longitudinal publisher experiments; default OFF. Requires restart."
+  ),
 }
 
 
@@ -48,6 +52,12 @@ class DeveloperLayout(Widget):
         initial_state=self._params.get_bool("AlphaLongitudinalEnabled"),
         callback=self._on_alpha_long_enabled,
       ),
+      toggle_item(
+        "Skip UDS Disable for Hyundai Long (NO_UDS_LONG)",
+        description=DESCRIPTIONS["no_uds_long"],
+        initial_state=self._params.get_bool("NoUdsLongEnabled"),
+        callback=self._on_no_uds_long_enabled,
+      ),
     ]
 
     self._scroller = Scroller(items, line_separator=True, spacing=0)
@@ -59,3 +69,4 @@ class DeveloperLayout(Widget):
   def _on_joystick_debug_mode(self): pass
   def _on_long_maneuver_mode(self): pass
   def _on_alpha_long_enabled(self): pass
+  def _on_no_uds_long_enabled(self): pass
