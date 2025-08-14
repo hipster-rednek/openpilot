@@ -11,7 +11,8 @@ Tasks
    - [ ] Add a passive monitor for OEM SCC/ADAS publisher frames on ECAN (IDs per HKG CAN-FD)
    - [ ] Define which IDs constitute "publisher present" (e.g., OEM SCC_CONTROL / ADAS DRV outputs)
    - [ ] Implement immediate relinquish if any OEM publisher frame is observed; log event, cool-down window
-   - [ ] Expose detector state to CarInterface (only allow publishing when detector == CLEAR)
+   - [x] Expose detector state via `CS.oem_scc_active` and last-seen timestamp
+   - [x] Gate host publishing of `SCC_CONTROL` when detector is ACTIVE
 
 2) Minimal SCC state machine (no formal UDS handoff)
    - [ ] Enumerate required frames/signals to emulate: master/engaged bits, set speed broadcast, gap state, control command(s), watchdogs
