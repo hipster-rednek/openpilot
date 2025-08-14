@@ -1,0 +1,57 @@
+Feature: Longitudinal without UDS disable (single-publisher policy)
+
+Goals
+- Publish SCC control only when OEM SCC/ADAS publisher is provably inactive
+- Replicate minimal SCC state machine (engage/cancel/resume, set-speed, gap) so downstream ECUs accept requests
+- Enforce a strict safety layer adapted to this regime
+- Validate on bench/HIL before any controlled vehicle tests
+
+Tasks
+1) Publisher detector (ECAN)
+   - [ ] Add a passive monitor for OEM SCC/ADAS publisher frames on ECAN (IDs per HKG CAN-FD)
+   - [ ] Define which IDs constitute "publisher present" (e.g., OEM SCC_CONTROL / ADAS DRV outputs)
+   - [ ] Implement immediate relinquish if any OEM publisher frame is observed; log event, cool-down window
+   - [ ] Expose detector state to CarInterface (only allow publishing when detector == CLEAR)
+
+2) Minimal SCC state machine (no formal UDS handoff)
+   - [ ] Enumerate required frames/signals to emulate: master/engaged bits, set speed broadcast, gap state, control command(s), watchdogs
+   - [ ] Implement engage/cancel/resume transitions triggered by OP engage (not SCC button)
+   - [ ] Implement set-speed behavior: down-only mode first (hold SET), then controlled up with hysteresis; align broadcast timing
+   - [ ] Implement gap handling: pick a default and minimal change frequency; broadcast as required
+   - [ ] HMI coherence: ensure cluster bits are sane; if required, add housekeeping frames
+
+3) Safety gating for this regime
+   - [ ] Define strict gating: allow control frames only when detector == CLEAR and OP engaged
+   - [ ] Enforce hard driver overrides: brake pedal → immediate CANCEL; accel when brake pressed → block
+   - [ ] TTC/cut-in panic: CANCEL and stop publishing when unsafe
+   - [ ] Jerk/accel/brake saturation limits; clamp requests conservatively
+   - [ ] Periodicity watchdogs: drop to CANCEL if miss deadlines or counter/checksum mismatch
+   - [ ] Logging for every inhibit/fallback
+
+4) Packing and checksums
+   - [ ] Use HKG CAN-FD DBC to pack SCC frames with correct counters/checksums
+   - [ ] Validate timing (Hz) matches OEM expectations; add randomized jitter if needed
+
+5) Integration points
+   - [ ] CarInterface: route longitudinal commands to the new publisher only when detector allows; otherwise pass through stock ACC
+   - [ ] Params/toggles: dev-only toggle to enable this mode; default off
+   - [ ] Panda safety: do NOT bypass; start with existing safety model limits and add additional host-side gating
+
+6) Bench/HIL validation (no on-road)
+   - [ ] Bench harness for ECAN; power downstream ECU(s)
+   - [ ] Verify acceptance of control frames without UDS disable, across transitions
+   - [ ] Exercise edge cases: brake touches, ignition cycles, AEB pre-arm, cluster toggles; ensure no faults/chimes
+
+7) Controlled vehicle tests (closed course)
+   - [ ] Wheels-up tests, then low-speed straight-line; validate CANCEL works instantly
+   - [ ] Validate engage/cancel/resume; set-speed changes; gap changes
+   - [ ] Validate panic CANCEL on TTC/cut-in logic
+
+8) Observability & revert
+   - [ ] Add detailed logs and on-screen dev indicators (detector state, publisher active, inhibit reasons)
+   - [ ] Clean rollback switch; default to stock ACC at any time; no on-road enable by default
+
+Out-of-scope / deferred
+- Full ADAS UDS disable or SecurityAccess
+- Any panda firmware bypass; we keep safety limits and add host gating
+- Emergency braking equivalence; we rely on AEB and conservative requests
