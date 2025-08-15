@@ -116,15 +116,21 @@ bool Params::checkKey(const std::string &key) {
 }
 
 ParamKeyFlag Params::getKeyFlag(const std::string &key) {
-  return static_cast<ParamKeyFlag>(keys[key].flags);
+  auto it = keys.find(key);
+  if (it != keys.end()) {
+    return static_cast<ParamKeyFlag>(it->second);
+  }
+  return static_cast<ParamKeyFlag>(0);
 }
 
 ParamKeyType Params::getKeyType(const std::string &key) {
-  return keys[key].type;
+  (void)key;
+  return ParamKeyType::STRING;
 }
 
 std::optional<std::string> Params::getKeyDefaultValue(const std::string &key) {
-  return keys[key].default_value;
+  (void)key;
+  return std::nullopt;
 }
 
 int Params::put(const char* key, const char* value, size_t value_size) {
@@ -213,7 +219,7 @@ void Params::clearAll(ParamKeyFlag key_flag) {
     while ((de = readdir(d))) {
       if (de->d_type != DT_DIR) {
         auto it = keys.find(de->d_name);
-        if (it == keys.end() || (it->second.flags & key_flag)) {
+        if (it == keys.end() || (it->second & key_flag)) {
           unlink(getParamPath(de->d_name).c_str());
         }
       }

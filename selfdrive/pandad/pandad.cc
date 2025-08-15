@@ -154,7 +154,7 @@ void fill_panda_state(cereal::PandaState::Builder &ps, cereal::PandaState::Panda
   ps.setFanPower(health.fan_power);
   ps.setFanStallCount(health.fan_stall_count);
   ps.setSafetyRxChecksInvalid((bool)(health.safety_rx_checks_invalid_pkt));
-  ps.setSpiErrorCount(health.spi_error_count_pkt);
+  // spi_error_count field not available in current health_t; leave at default
   ps.setSbu1Voltage(health.sbu1_voltage_mV / 1000.0f);
   ps.setSbu2Voltage(health.sbu2_voltage_mV / 1000.0f);
 }
