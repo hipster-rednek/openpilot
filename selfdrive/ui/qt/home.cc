@@ -121,6 +121,35 @@ OffroadHome::OffroadHome(QWidget* parent) : QFrame(parent) {
   QObject::connect(alert_notif, &QPushButton::clicked, [=] { center_layout->setCurrentIndex(2); });
   header_layout->addWidget(alert_notif, 0, Qt::AlignHCenter | Qt::AlignLeft);
 
+  // Offroad/Onroad toggle button in offroad home header
+  offroad_toggle_btn = new QPushButton(this);
+  offroad_toggle_btn->setFixedSize(360, 120);
+  offroad_toggle_btn->setStyleSheet("font-size: 48px; font-weight: 600; color: white; border: none; border-radius: 12px; background-color: #2B8A3E;");
+  // init label/state from param
+  {
+    bool force = params.getBool("ForceOffroad");
+    if (force) {
+      offroad_toggle_btn->setText(tr("ONROAD"));
+      offroad_toggle_btn->setStyleSheet("font-size: 48px; font-weight: 600; color: white; border: none; border-radius: 12px; background-color: #2B8A3E;");
+    } else {
+      offroad_toggle_btn->setText(tr("OFFROAD"));
+      offroad_toggle_btn->setStyleSheet("font-size: 48px; font-weight: 600; color: white; border: none; border-radius: 12px; background-color: #C92A2A;");
+    }
+  }
+  QObject::connect(offroad_toggle_btn, &QPushButton::clicked, [=]() mutable {
+    bool force = params.getBool("ForceOffroad");
+    params.putBool("ForceOffroad", !force);
+    force = !force;
+    if (force) {
+      offroad_toggle_btn->setText(tr("ONROAD"));
+      offroad_toggle_btn->setStyleSheet("font-size: 48px; font-weight: 600; color: white; border: none; border-radius: 12px; background-color: #2B8A3E;");
+    } else {
+      offroad_toggle_btn->setText(tr("OFFROAD"));
+      offroad_toggle_btn->setStyleSheet("font-size: 48px; font-weight: 600; color: white; border: none; border-radius: 12px; background-color: #C92A2A;");
+    }
+  });
+  header_layout->addWidget(offroad_toggle_btn, 0, Qt::AlignRight);
+
   version = new ElidedLabel();
   header_layout->addWidget(version, 0, Qt::AlignHCenter | Qt::AlignRight);
 

@@ -343,6 +343,12 @@ def hardware_thread(end_event, hw_queue) -> None:
 
     # Handle offroad/onroad transition
     should_start = all(onroad_conditions.values())
+    # Allow UI to force offroad mode (e.g., to allow updates)
+    try:
+      if params.get_bool("ForceOffroad"):
+        should_start = False
+    except Exception:
+      pass
     if started_ts is None:
       should_start = should_start and all(startup_conditions.values())
 

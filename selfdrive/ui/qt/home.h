@@ -39,6 +39,7 @@ private:
   OffroadAlert* alerts_widget;
   QPushButton* alert_notif;
   QPushButton* update_notif;
+  QPushButton* offroad_toggle_btn;
 };
 
 class HomeWindow : public QWidget {

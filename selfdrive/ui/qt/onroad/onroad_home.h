@@ -2,6 +2,8 @@
 
 #include "selfdrive/ui/qt/onroad/alerts.h"
 #include "selfdrive/ui/qt/onroad/annotated_camera.h"
+#include <QPushButton>
+#include <QHBoxLayout>
 
 class OnroadWindow : public QWidget {
   Q_OBJECT
@@ -15,6 +17,7 @@ private:
   AnnotatedCameraWidget *nvg;
   QColor bg = bg_colors[STATUS_DISENGAGED];
   QHBoxLayout* split;
+  QPushButton *force_offroad_btn;
 
 private slots:
   void offroadTransition(bool offroad);
