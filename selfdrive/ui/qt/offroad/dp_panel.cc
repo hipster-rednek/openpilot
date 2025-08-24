@@ -150,6 +150,26 @@ void DPPanel::add_lateral_toggles() {
   auto lca_speed_toggle = new ParamSpinBoxControl("dp_lat_lca_speed", tr("LCA Speed:"), tr("Off = Disable LCA\n1 mph ≈ 1.2 km/h"), "", 0, 100, 5, tr(" mph"), tr("Off"));
   lca_sec_toggle = new ParamDoubleSpinBoxControl("dp_lat_lca_auto_sec", QString::fromUtf8("　") + tr("Auto Lane Change after:"), tr("Off = Disable Auto Lane Change."), "", 0, 5.0, 0.5, tr(" sec"), tr("Off"));
 
+  // Torque tuning parameters (advanced)
+  auto torque_lat_accel_factor = new ParamDoubleSpinBoxControl(
+      "dp_torque_lat_accel_factor",
+      QString::fromUtf8("　") + tr("LAT_ACCEL_FACTOR:"),
+      tr("Scaling from desired lateral accel to steering torque. Higher = more immediate authority."),
+      "",
+      1.0, 5.0, 0.01, "");
+  auto torque_max_lat_accel_measured = new ParamDoubleSpinBoxControl(
+      "dp_torque_max_lat_accel_measured",
+      QString::fromUtf8("　") + tr("MAX_LAT_ACCEL_MEASURED:"),
+      tr("Upper capability limit used for tuning and safety checks (m/s²)."),
+      "",
+      1.0, 4.0, 0.01, tr(" m/s²"));
+  auto torque_friction = new ParamDoubleSpinBoxControl(
+      "dp_torque_friction",
+      QString::fromUtf8("　") + tr("FRICTION:"),
+      tr("Static friction compensation in steering model. Lower = softer on-center, too low can cause wander."),
+      "",
+      0.01, 0.5, 0.005, "");
+
   QWidget *label = nullptr;
   bool has_toggle = false;
 
@@ -159,6 +179,10 @@ void DPPanel::add_lateral_toggles() {
       addItem(label);
       addItem(lca_speed_toggle);
       addItem(lca_sec_toggle);
+      // Add advanced torque tuning controls
+      addItem(torque_lat_accel_factor);
+      addItem(torque_max_lat_accel_measured);
+      addItem(torque_friction);
       has_toggle = true;
       continue;
     }
@@ -375,6 +399,28 @@ DPPanel::DPPanel(SettingsWindow *parent) : ListWidget(parent) {
     brand = QString::fromStdString(CP.getBrand());
     vehicle_has_long_ctrl = hasLongitudinalControl(CP);
     vehicle_has_radar_unavailable = CP.getRadarUnavailable();
+
+    // Seed default torque tuning DP params from current CarParams if not set yet
+    try {
+      const std::string k_lat = "dp_torque_lat_accel_factor";
+      const std::string k_max = "dp_torque_max_lat_accel_measured";
+      const std::string k_fric = "dp_torque_friction";
+
+      if (params.get(k_lat).empty() || params.get(k_fric).empty() || params.get(k_max).empty()) {
+        if (CP.getLateralTuning().isTorque()) {
+          const auto torque = CP.getLateralTuning().getTorque();
+          const double lat_factor = torque.getLatAccelFactor();
+          const double friction = torque.getFriction();
+          const double max_lat = CP.getMaxLateralAccel();
+
+          if (params.get(k_lat).empty()) params.put(k_lat, std::to_string(lat_factor));
+          if (params.get(k_fric).empty()) params.put(k_fric, std::to_string(friction));
+          if (params.get(k_max).empty()) params.put(k_max, std::to_string(max_lat));
+        }
+      }
+    } catch (...) {
+      // ignore seeding errors
+    }
   }
 
   if (brand == "toyota") {

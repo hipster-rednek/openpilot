@@ -10,6 +10,7 @@ from collections.abc import Callable
 from functools import cache
 
 from opendbc.car import DT_CTRL, apply_hysteresis, gen_empty_fingerprint, scale_rot_inertia, scale_tire_stiffness, get_friction, STD_CARGO_KG
+from common.params import Params
 from opendbc.car import structs
 from opendbc.car.can_definitions import CanData, CanRecvCallable, CanSendCallable
 from opendbc.car.common.basedir import BASEDIR
@@ -199,6 +200,15 @@ class CarInterfaceBase(ABC):
 
     # Car docs fields
     ret.maxLateralAccel = get_torque_params()[candidate]['MAX_LAT_ACCEL_MEASURED']
+    # Override from DP params if provided
+    try:
+      dp_max_lat_accel_str = Params().get('dp_torque_max_lat_accel_measured')
+      if dp_max_lat_accel_str:
+        dp_max_lat_accel = float(dp_max_lat_accel_str)
+        if dp_max_lat_accel > 0.0:
+          ret.maxLateralAccel = dp_max_lat_accel
+    except Exception:
+      pass
     ret.autoResumeSng = True  # describes whether car can resume from a stop automatically
 
     # standard ALC params
@@ -238,6 +248,22 @@ class CarInterfaceBase(ABC):
     tune.torque.latAccelFactor = params['LAT_ACCEL_FACTOR']
     tune.torque.latAccelOffset = 0.0
     tune.torque.steeringAngleDeadzoneDeg = steering_angle_deadzone_deg
+
+    # Override from DP params if provided
+    try:
+      p = Params()
+      dp_lat_factor_str = p.get('dp_torque_lat_accel_factor')
+      if dp_lat_factor_str:
+        dp_lat_factor = float(dp_lat_factor_str)
+        if dp_lat_factor > 0.0:
+          tune.torque.latAccelFactor = dp_lat_factor
+      dp_friction_str = p.get('dp_torque_friction')
+      if dp_friction_str:
+        dp_friction = float(dp_friction_str)
+        if dp_friction > 0.0:
+          tune.torque.friction = dp_friction
+    except Exception:
+      pass
 
   def update(self, can_packets: list[tuple[int, list[CanData]]]) -> structs.CarState:
     # parse can
