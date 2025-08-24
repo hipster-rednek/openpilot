@@ -168,7 +168,7 @@ void DPPanel::add_lateral_toggles() {
       QString::fromUtf8("　") + tr("FRICTION:"),
       tr("Static friction compensation in steering model. Lower = softer on-center, too low can cause wander."),
       "",
-      0.01, 0.5, 0.005, "");
+      0.01, 2.0, 0.005, "");
 
   QWidget *label = nullptr;
   bool has_toggle = false;
@@ -400,24 +400,15 @@ DPPanel::DPPanel(SettingsWindow *parent) : ListWidget(parent) {
     vehicle_has_long_ctrl = hasLongitudinalControl(CP);
     vehicle_has_radar_unavailable = CP.getRadarUnavailable();
 
-    // Seed default torque tuning DP params from current CarParams if not set yet
+    // Seed default torque tuning DP params if not set yet (use requested defaults)
     try {
       const std::string k_lat = "dp_torque_lat_accel_factor";
       const std::string k_max = "dp_torque_max_lat_accel_measured";
       const std::string k_fric = "dp_torque_friction";
 
-      if (params.get(k_lat).empty() || params.get(k_fric).empty() || params.get(k_max).empty()) {
-        if (CP.getLateralTuning().isTorque()) {
-          const auto torque = CP.getLateralTuning().getTorque();
-          const double lat_factor = torque.getLatAccelFactor();
-          const double friction = torque.getFriction();
-          const double max_lat = CP.getMaxLateralAccel();
-
-          if (params.get(k_lat).empty()) params.put(k_lat, std::to_string(lat_factor));
-          if (params.get(k_fric).empty()) params.put(k_fric, std::to_string(friction));
-          if (params.get(k_max).empty()) params.put(k_max, std::to_string(max_lat));
-        }
-      }
+      if (params.get(k_lat).empty()) params.put(k_lat, std::string("2.5"));
+      if (params.get(k_max).empty()) params.put(k_max, std::string("2.5"));
+      if (params.get(k_fric).empty()) params.put(k_fric, std::string("1.0"));
     } catch (...) {
       // ignore seeding errors
     }
